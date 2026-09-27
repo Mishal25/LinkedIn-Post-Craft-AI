@@ -1,26 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { checkGeminiStatus, GeminiStatus } from '../services/geminiService';
 
 interface ApiConfigModalProps {
   isOpen: boolean;
   onClose: () => void;
-  apiKey: string;
-  onSaveApiKey: (key: string, temperature: number, model: string) => void;
   temperature: number;
-  selectedModel: string;
+  onSavePreferences: (temp: number) => void;
 }
 
 export const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
   isOpen,
   onClose,
-  apiKey,
-  onSaveApiKey,
   temperature: initialTemp,
-  selectedModel: initialModel
+  onSavePreferences
 }) => {
-  const [keyInput, setKeyInput] = useState(apiKey);
   const [temp, setTemp] = useState(initialTemp);
-  const [model, setModel] = useState(initialModel);
-  const [showKey, setShowKey] = useState(false);
+  const [status, setStatus] = useState<GeminiStatus | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setChecking(true);
+      checkGeminiStatus()
+        .then(res => setStatus(res))
+        .finally(() => setChecking(false));
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -30,10 +35,11 @@ export const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
         className="w-full max-w-md bg-surface-container-lowest rounded-2xl shadow-2xl border border-surface-container p-6 flex flex-col gap-4"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary text-[24px]">settings_suggest</span>
-            <h3 className="font-headline-md text-headline-md text-on-surface">AI Engine Settings</h3>
+            <span className="material-symbols-outlined text-primary text-[24px]">auto_awesome</span>
+            <h3 className="font-headline-md text-headline-md text-on-surface">Gemini AI Studio Engine</h3>
           </div>
           <button 
             type="button"
@@ -45,92 +51,57 @@ export const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
         </div>
 
         <p className="font-body-md text-body-md text-on-surface-variant leading-relaxed">
-          Configure Google Gemini model parameters for instant LinkedIn post authoring, algorithmic hook analysis, and personalized style tuning.
+          LinkedIn Post Craft AI is powered by Google’s latest <strong className="text-on-surface">Gemini 3.8 Flash</strong> multimodal architecture for real-time post generation, viral hook synthesis, and visual infographic parsing.
         </p>
 
-        {/* Model selection */}
-        <div className="flex flex-col gap-1.5">
-          <label className="font-label-sm text-label-sm text-on-surface font-semibold">Active Model</label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setModel('Gemini 1.5 Flash')}
-              className={`p-2.5 rounded-xl border text-left font-label-sm text-label-sm transition-all ${
-                model === 'Gemini 1.5 Flash'
-                  ? 'border-primary bg-primary/10 text-primary font-bold shadow-xs'
-                  : 'border-surface-container bg-surface-container-low text-on-surface-variant'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span>Gemini 1.5 Flash</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-container text-primary font-bold">Fast</span>
-              </div>
-              <span className="text-[11px] text-on-surface-variant block mt-0.5 font-normal">Sub-second generation</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setModel('Gemini 3.8 Flash')}
-              className={`p-2.5 rounded-xl border text-left font-label-sm text-label-sm transition-all ${
-                model === 'Gemini 3.8 Flash'
-                  ? 'border-primary bg-primary/10 text-primary font-bold shadow-xs'
-                  : 'border-surface-container bg-surface-container-low text-on-surface-variant'
-              }`}
-            >
-              <div className="flex items-center justify-between">
+        {/* Engine status indicator */}
+        <div className="p-3.5 rounded-xl bg-surface-container-low border border-surface-container flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-primary-container/20 flex items-center justify-center">
+              <span className="material-symbols-outlined text-primary text-[20px]">bolt</span>
+            </div>
+            <div>
+              <div className="font-label-md text-label-md text-on-surface font-semibold flex items-center gap-1.5">
                 <span>Gemini 3.8 Flash</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-tertiary-container text-on-tertiary-container font-bold">Pro</span>
+                <span className="px-1.5 py-0.2 text-[10px] rounded bg-primary/10 text-primary font-bold">Latest</span>
               </div>
-              <span className="text-[11px] text-on-surface-variant block mt-0.5 font-normal">Advanced nuances</span>
-            </button>
+              <span className="text-[11px] text-on-surface-variant font-mono-metric">
+                {checking ? 'Pinging server engine...' : status?.hasKey ? 'Enterprise AI Key Connected' : 'Ready (Full-Stack Backend Active)'}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-tertiary-container/30 border border-tertiary/20">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span className="text-[11px] font-bold text-tertiary">Active</span>
           </div>
         </div>
 
-        {/* API Key field */}
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <label className="font-label-sm text-label-sm text-on-surface font-semibold" htmlFor="apiKeyField">
-              Gemini API Key
-            </label>
-            <button 
-              type="button"
-              onClick={() => setShowKey(!showKey)}
-              className="text-[11px] text-primary hover:underline font-label-sm"
-            >
-              {showKey ? 'Hide Key' : 'Reveal Key'}
-            </button>
+        {/* Features matrix */}
+        <div className="grid grid-cols-2 gap-2 text-[12px]">
+          <div className="p-2.5 rounded-xl bg-surface-container-low/60 border border-surface-container/60 flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary text-[18px]">verified</span>
+            <span className="text-on-surface font-medium">Multimodal Vision</span>
           </div>
-          <div className="relative">
-            <input 
-              id="apiKeyField"
-              type={showKey ? 'text' : 'password'}
-              value={keyInput}
-              onChange={(e) => setKeyInput(e.target.value)}
-              placeholder="AIzaSy... (Leave empty to use built-in mock engine)"
-              className="w-full bg-surface-container-low text-on-surface p-2.5 pr-10 rounded-xl outline-none font-mono-metric text-mono-metric placeholder:text-outline focus:bg-surface-container border border-surface-container transition-all"
-            />
-            {keyInput && (
-              <button 
-                type="button"
-                onClick={() => setKeyInput('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface p-1"
-                title="Clear key"
-              >
-                <span className="material-symbols-outlined text-[16px]">cancel</span>
-              </button>
-            )}
+          <div className="p-2.5 rounded-xl bg-surface-container-low/60 border border-surface-container/60 flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary text-[18px]">insights</span>
+            <span className="text-on-surface font-medium">Viral Hook Engine</span>
           </div>
-          <span className="text-on-surface-variant text-[11px] flex items-center gap-1">
-            <span className="material-symbols-outlined text-[14px] text-tertiary">lock</span>
-            Stored locally in browser localStorage only. Never transmitted elsewhere.
-          </span>
+          <div className="p-2.5 rounded-xl bg-surface-container-low/60 border border-surface-container/60 flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary text-[18px]">auto_fix_high</span>
+            <span className="text-on-surface font-medium">Instant Polish AI</span>
+          </div>
+          <div className="p-2.5 rounded-xl bg-surface-container-low/60 border border-surface-container/60 flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary text-[18px]">shield</span>
+            <span className="text-on-surface font-medium">Server Proxy Security</span>
+          </div>
         </div>
 
-        {/* Creativity slider */}
-        <div className="flex flex-col gap-1.5">
+        {/* Temperature slider */}
+        <div className="flex flex-col gap-1.5 pt-1">
           <div className="flex items-center justify-between">
             <label className="font-label-sm text-label-sm text-on-surface font-semibold">
-              Creativity / Temperature
+              Creativity / Sampling Temperature
             </label>
             <span className="font-mono-metric text-mono-metric text-primary font-bold">{temp.toFixed(1)}</span>
           </div>
@@ -144,30 +115,30 @@ export const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
             className="w-full accent-[#0a66c2] cursor-pointer"
           />
           <div className="flex justify-between text-[11px] text-on-surface-variant font-mono-metric">
-            <span>0.2 (Precise & Concise)</span>
+            <span>0.2 (Rigorous & Data-Driven)</span>
             <span>0.7 (Balanced)</span>
-            <span>1.0 (Bold & Expressive)</span>
+            <span>1.0 (Bold & Unconventional)</span>
           </div>
         </div>
 
-        {/* Action buttons */}
+        {/* Footer */}
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-surface-container">
           <button 
             type="button"
             onClick={onClose}
             className="px-4 py-2 rounded-xl text-on-surface-variant hover:bg-surface-container font-label-md text-label-md transition-colors"
           >
-            Cancel
+            Close
           </button>
           <button 
             type="button"
             onClick={() => {
-              onSaveApiKey(keyInput, temp, model);
+              onSavePreferences(temp);
               onClose();
             }}
             className="px-4 py-2 rounded-xl bg-primary-container text-on-primary font-label-md text-label-md hover:bg-primary shadow-sm font-semibold transition-all active:scale-95"
           >
-            Save Preferences
+            Save Settings
           </button>
         </div>
       </div>

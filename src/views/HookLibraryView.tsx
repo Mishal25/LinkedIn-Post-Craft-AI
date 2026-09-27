@@ -7,13 +7,11 @@ import { toUnicodeBold, toUnicodeItalic } from '../utils/unicode';
 interface HookLibraryViewProps {
   onLoadHookInEditor: (hookText: string) => void;
   showToast: (msg: string) => void;
-  apiKey?: string;
 }
 
 export const HookLibraryView: React.FC<HookLibraryViewProps> = ({
   onLoadHookInEditor,
-  showToast,
-  apiKey
+  showToast
 }) => {
   const [hooksList, setHooksList] = useState<ViralHook[]>(CURATED_HOOKS);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -83,7 +81,7 @@ Here are the 4 non-negotiables we followed:`;
   const handleGenerateHooks = async () => {
     setIsGenerating(true);
     try {
-      const generatedHooks = await generateViralHooks(topicInput, selectedAngle, apiKey);
+      const generatedHooks = await generateViralHooks(topicInput, selectedAngle);
       
       const newItems: ViralHook[] = generatedHooks.map((gh, idx) => {
         const lines = gh.split('\n').filter(l => l.trim().length > 0);

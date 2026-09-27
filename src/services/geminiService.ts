@@ -1,7 +1,6 @@
-import { GoogleGenAI } from '@google/genai';
 import { PostTone, TargetLength, PostAuditMetrics } from '../types';
 
-interface GenerationParams {
+export interface GenerationParams {
   topic: string;
   tone: PostTone;
   length: TargetLength;
@@ -12,10 +11,47 @@ interface GenerationParams {
   includeViralHook: boolean;
   imageUrl?: string;
   imageCaption?: string;
-  apiKey?: string;
   temperature?: number;
 }
 
+export interface ImageAnalysisResult {
+  visualTitle: string;
+  coreTakeaway: string;
+  keyPoints: string[];
+  suggestedHook: string;
+  suggestedPostDraft: string;
+}
+
+export interface GeminiStatus {
+  ok: boolean;
+  hasKey: boolean;
+  model: string;
+}
+
+/**
+ * Checks server-side Gemini API connectivity and configuration.
+ */
+export async function checkGeminiStatus(): Promise<GeminiStatus> {
+  try {
+    const res = await fetch('/api/gemini/status');
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        ok: true,
+        hasKey: Boolean(data.hasKey),
+        model: data.model || 'gemini-3.8-flash'
+      };
+    }
+  } catch (err) {
+    console.warn('Could not query Gemini status endpoint:', err);
+  }
+  return { ok: false, hasKey: false, model: 'gemini-3.8-flash' };
+}
+
+/**
+ * Generates an executive LinkedIn post using the server-side Gemini 3.8 Flash model.
+ * Seamlessly falls back to the algorithmic generator if server-side Gemini is unreachable.
+ */
 export async function generateLinkedInPost(params: GenerationParams): Promise<string> {
   const {
     topic,
@@ -28,88 +64,127 @@ export async function generateLinkedInPost(params: GenerationParams): Promise<st
     includeViralHook,
     imageUrl,
     imageCaption,
-    apiKey,
     temperature = 0.7
   } = params;
 
-  const keyToUse = apiKey || (typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : undefined);
+  try {
+    const res = await fetch('/api/gemini/generate-post', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        topic,
+        tone,
+        length,
+        audience,
+        cta,
+        includeEmojis,
+        includeHashtags,
+        includeViralHook,
+        imageUrl,
+        imageCaption,
+        temperature
+      })
+    });
 
-  if (keyToUse && keyToUse !== 'MY_GEMINI_API_KEY' && keyToUse.trim().length > 10) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: keyToUse.trim() });
-      const wordCountConstraint = length === 'short' 
-        ? 'under 150 words' 
-        : length === 'medium' 
-        ? 'between 180 and 320 words (the exact LinkedIn sweet spot)' 
-        : 'between 400 and 550 words';
-
-      const imageContext = imageUrl 
-        ? `\nAttached Visual Asset: An image / framework infographic is attached to this LinkedIn post.${imageCaption ? ` Image Caption/Context: "${imageCaption}".` : ''} Explicitly reference the attached visual framework naturally in the post (e.g. "Take a look at the breakdown below 👇" or "The diagram below maps this out:").`
-        : '';
-
-      const prompt = `You are a world-class LinkedIn thought leadership ghostwriter for Fortune 500 executives, top founders, and technical leaders.
-Generate a high-converting, viral LinkedIn post based on these exact constraints:
-
-Core Topic / Story: ${topic || 'Why most founders fail in their first 90 days'}
-Tone & Voice: ${tone}
-Target Audience: ${audience}
-Target Length: ${wordCountConstraint}
-Call To Action: ${cta}
-Include Emojis: ${includeEmojis ? 'Yes, tasteful high-signal emojis' : 'No emojis at all'}
-Include Hashtags: ${includeHashtags ? 'Yes, 3-5 relevant niche hashtags at the bottom' : 'No hashtags'}
-Include High-Dwell Viral Hook: ${includeViralHook ? 'Crucial: First 2-3 lines must be a high-tension cliffhanger that stops the scroll before LinkedIn "...see more" cutoff.' : 'Standard opening'}${imageContext}
-
-Formatting Rules for LinkedIn Algorithm Optimization:
-1. First 3 lines must have intense tension, counter-intuitive contrast, or specific numbers.
-2. Generous line breaks. Maximum 1-2 sentences per paragraph to maximize dwell-time on mobile.
-3. Use bullet points or arrows for scannability.
-4. Bold key headings using mathematical unicode bold if appropriate.
-5. End with the specified Call to Action.
-
-Do NOT include any preamble, introduction, markdown quotes, or closing explanations. Output ONLY the raw post text ready to publish.`;
-
-      // Check if image is a base64 data url for multimodality
-      let contents: any = prompt;
-      if (imageUrl && imageUrl.startsWith('data:image/')) {
-        const match = imageUrl.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
-        if (match) {
-          contents = [
-            {
-              inlineData: {
-                mimeType: match[1],
-                data: match[2]
-              }
-            },
-            { text: prompt }
-          ];
-        }
+    if (res.ok) {
+      const data = await res.json();
+      if (data.ok && data.post && data.post.trim().length > 30) {
+        return data.post.trim();
       }
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents,
-        config: {
-          temperature
-        }
-      });
-
-      if (response.text && response.text.trim().length > 50) {
-        return response.text.trim();
-      }
-    } catch (err) {
-      console.warn('Gemini API call failed or key invalid, using algorithmic generator:', err);
     }
+  } catch (err) {
+    console.warn('Server Gemini generate-post call error, falling back to algorithmic engine:', err);
   }
 
   // High-performance algorithmic fallback engine
   return generateAlgorithmicPost(params);
 }
 
+/**
+ * Generates 5 viral, high-dwell LinkedIn openers (hooks) using Gemini 3.8 Flash.
+ */
+export async function generateViralHooks(topic: string, angle: string): Promise<string[]> {
+  try {
+    const res = await fetch('/api/gemini/generate-hooks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic, angle })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.ok && Array.isArray(data.hooks) && data.hooks.length > 0) {
+        return data.hooks;
+      }
+    }
+  } catch (err) {
+    console.warn('Server Gemini generate-hooks call error, using curated patterns:', err);
+  }
+
+  // Algorithmic hook fallback
+  const t = topic.trim() || 'scaling B2B SaaS without paid ads';
+  return [
+    `90% of founders fail at ${t}. Here is the 10% playbook:\n\nMost people think it takes 80-hour workweeks and VC millions.\nThe actual secret is painfully simple:`,
+    `Unpopular opinion: Stop doing ${t} the way everyone else does.\n\n99% of conventional playbooks are outdated 2021 tactics.\nHere is what top 1% operators actually do instead:`,
+    `I spent 4 years building the wrong system for ${t}. Here are 5 lessons I wish I knew earlier:\n\nIn 2021, our runway evaporated to $4,200. I was forced to face the hardest truth of my career...`,
+    `The biggest lie in tech right now about ${t}:\n\nOnce you see how the algorithm actually rewards this, you can never go back.`,
+    `How we cracked ${t} with $0 budget (steal this exact 4-part skeleton):\n\nNo marketing agency. No cold spam emails. Just a simple 3-pillar audience flywheel:`
+  ];
+}
+
+/**
+ * Multimodal image analysis using Gemini 3.8 Flash.
+ * Extracts key strategic points, narrative hooks, and publish-ready LinkedIn copy from an infographic or chart.
+ */
+export async function analyzeVisualWithGemini(imageUrl: string, context?: string): Promise<ImageAnalysisResult | null> {
+  try {
+    const res = await fetch('/api/gemini/analyze-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageUrl, context })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.ok && data.data) {
+        return data.data as ImageAnalysisResult;
+      }
+    }
+  } catch (err) {
+    console.warn('Server Gemini analyze-image error:', err);
+  }
+  return null;
+}
+
+/**
+ * Rewrites and polishes an existing LinkedIn post draft using Gemini 3.8 Flash.
+ */
+export async function improvePostWithGemini(postContent: string, instruction: string): Promise<string> {
+  try {
+    const res = await fetch('/api/gemini/improve-post', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ postContent, instruction })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.ok && data.improvedPost) {
+        return data.improvedPost.trim();
+      }
+    }
+  } catch (err) {
+    console.warn('Server Gemini improve-post error:', err);
+  }
+  return postContent;
+}
+
+/**
+ * Algorithmic generator fallback with verified executive templates.
+ */
 export function generateAlgorithmicPost(params: GenerationParams): string {
   const { topic, tone, length, cta, includeEmojis, includeHashtags, imageUrl, imageCaption } = params;
   const cleanTopic = topic.trim() || 'early-stage SaaS founders building things nobody pays for';
-
-  const emoji = (symbol: string) => includeEmojis ? symbol : '';
 
   const hookTemplates: Record<string, string[]> = {
     Storytelling: [
@@ -206,49 +281,9 @@ Distribution and true problem clarity is the actual moat.`;
   return `${hook}\n\n${body}${visualAnchor}\n\n${ctaLine}${hashtags}`;
 }
 
-export async function generateViralHooks(topic: string, angle: string, apiKey?: string): Promise<string[]> {
-  const keyToUse = apiKey || (typeof process !== 'undefined' ? process.env?.GEMINI_API_KEY : undefined);
-
-  if (keyToUse && keyToUse !== 'MY_GEMINI_API_KEY' && keyToUse.trim().length > 10) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: keyToUse.trim() });
-      const prompt = `Generate 5 viral 3-line LinkedIn openers (hooks) optimized for dwell-time and the "...see more" cutoff.
-Topic: "${topic || 'B2B Growth and SaaS engineering'}"
-Psychological Angle: "${angle}"
-
-Requirements:
-- Each hook must have 2 to 3 lines.
-- First line: High-tension cliffhanger or contrarian fact under 90 characters.
-- Second/Third line: Intriguing setup that forces the reader to tap "...see more".
-- Output ONLY the 5 hooks separated by '---'. Do not output any numbering or preamble.`;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt
-      });
-
-      if (response.text) {
-        const splits = response.text.split('---').map(s => s.trim()).filter(s => s.length > 20);
-        if (splits.length >= 3) {
-          return splits.slice(0, 5);
-        }
-      }
-    } catch (err) {
-      console.warn('Gemini Hook generation failed, using algorithmic fallbacks:', err);
-    }
-  }
-
-  // Algorithmic fallbacks
-  const t = topic.trim() || 'scaling B2B SaaS without paid ads';
-  return [
-    `90% of founders fail at ${t}. Here is the 10% playbook:\n\nMost people think it takes 80-hour workweeks and VC millions.\nThe actual secret is painfully simple:`,
-    `Unpopular opinion: Stop doing ${t} the way everyone else does.\n\n99% of conventional playbooks are outdated 2021 tactics.\nHere is what top 1% operators actually do instead:`,
-    `I spent 4 years building the wrong system for ${t}. Here are 5 lessons I wish I knew earlier:\n\nIn 2021, our runway evaporated to $4,200. I was forced to face the hardest truth of my career...`,
-    `The biggest lie in tech right now about ${t}:\n\nOnce you see how the algorithm actually rewards this, you can never go back.`,
-    `How we cracked ${t} with $0 budget (steal this exact 4-part skeleton):\n\nNo marketing agency. No cold spam emails. Just a simple 3-pillar audience flywheel:`
-  ];
-}
-
+/**
+ * Audits post mechanics, character and word counts, hook friction, and readability.
+ */
 export function auditDraftPost(content: string): PostAuditMetrics {
   const text = (content || '').trim();
   const charCount = text.length;
@@ -256,15 +291,11 @@ export function auditDraftPost(content: string): PostAuditMetrics {
   const wordCount = words.length;
   const readTimeSec = Math.max(12, Math.ceil(wordCount / 3.6));
 
-  // Extract hashtags
   const hashtags = (text.match(/#\w+/g) || []).map(t => t.trim());
-
-  // Split lines
   const lines = text.split('\n').filter(l => l.trim().length > 0);
   const firstLine = lines[0] || '';
   const first3Lines = lines.slice(0, 3).join(' ');
 
-  // Calculate Hook Strength
   let hookScore = 75;
   if (/^\d+%|^Unpopular opinion|^Stop |^How we |^I spent |^The biggest lie/i.test(firstLine)) {
     hookScore += 16;
@@ -277,15 +308,11 @@ export function auditDraftPost(content: string): PostAuditMetrics {
   }
   hookScore = Math.min(99, Math.max(50, hookScore));
 
-  // Calculate Readability (Flesch simulated)
   const avgWordLen = wordCount > 0 ? text.replace(/\s+/g, '').length / wordCount : 4.5;
   const fleschGrade = Math.max(5.2, Math.min(10.5, parseFloat((avgWordLen * 1.3).toFixed(1))));
   const readabilityScore = Math.min(98, Math.max(60, Math.round(100 - (fleschGrade - 5) * 5)));
 
-  // Fold Status check
   const foldStatus: 'safe' | 'warning' | 'cutoff' = first3Lines.length <= 220 ? 'safe' : 'warning';
-
-  // Reach Velocity
   const reachVelocityPct = Math.round(20 + (hookScore - 70) * 0.7);
   const dwellUnits = Math.round(wordCount * 14.5 + hookScore * 2);
 

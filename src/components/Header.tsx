@@ -47,7 +47,7 @@ export const Header: React.FC<HeaderProps> = ({
             LinkedIn Post Craft AI
           </span>
           <span className="px-2 py-0.5 bg-primary-container text-on-primary font-label-sm text-label-sm rounded-full font-semibold">
-            AI v1.5
+            Gemini 3.8
           </span>
           <span className="hidden sm:inline-flex px-2 py-0.5 bg-tertiary-container text-on-tertiary-container font-label-sm text-label-sm rounded-full font-semibold">
             Pro
@@ -126,13 +126,13 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
           </button>
 
-          {/* Model indicator / API settings button */}
+          {/* Model indicator / AI settings button */}
           <button 
             type="button"
             onClick={onOpenApiConfig}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface-container-low text-on-surface font-label-sm text-label-sm hover:bg-surface-container-high transition-colors shadow-xs"
           >
-            <span className="material-symbols-outlined text-[17px] text-primary">key</span>
+            <span className="material-symbols-outlined text-[17px] text-primary">auto_awesome</span>
             <span className="hidden sm:inline font-medium">{selectedModel}</span>
           </button>
 
@@ -182,8 +182,8 @@ export const Header: React.FC<HeaderProps> = ({
                   }}
                   className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-surface-container text-on-surface font-label-md text-label-md transition-colors"
                 >
-                  <span className="material-symbols-outlined text-[18px] text-primary">settings</span>
-                  <span>AI Engine & API Config</span>
+                  <span className="material-symbols-outlined text-[18px] text-primary">auto_awesome</span>
+                  <span>Gemini AI Engine Settings</span>
                 </button>
 
                 <button 

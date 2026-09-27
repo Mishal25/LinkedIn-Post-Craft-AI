@@ -27,17 +27,10 @@ export default function App() {
     }
   });
 
-  // API Config
+  // Gemini AI Engine Config
   const [apiModalOpen, setApiModalOpen] = useState(false);
-  const [apiKey, setApiKey] = useState<string>(() => {
-    try {
-      return localStorage.getItem('user_gemini_api_key') || '';
-    } catch {
-      return '';
-    }
-  });
   const [temperature, setTemperature] = useState<number>(0.7);
-  const [selectedModel, setSelectedModel] = useState<string>('Gemini 1.5 Flash');
+  const selectedModel = 'Gemini 3.8 Flash';
 
   // Shared editor text and image when transitioning from other views
   const [activeEditorText, setActiveEditorText] = useState<string>('');
@@ -79,16 +72,9 @@ export default function App() {
     }, 2800);
   };
 
-  const handleSaveApiKey = (key: string, temp: number, model: string) => {
-    setApiKey(key);
+  const handleSavePreferences = (temp: number) => {
     setTemperature(temp);
-    setSelectedModel(model);
-    try {
-      localStorage.setItem('user_gemini_api_key', key);
-    } catch (e) {
-      console.error(e);
-    }
-    showToast(key ? 'Gemini API credentials connected!' : 'Using built-in algorithmic engine');
+    showToast('Gemini AI engine parameters updated!');
   };
 
   const handleSaveDraft = (newDraft: DraftPost) => {
@@ -152,7 +138,6 @@ export default function App() {
             onExploreHooks={() => setActiveTab('hook-library')}
             onOpenApiConfig={() => setApiModalOpen(true)}
             showToast={showToast}
-            apiKey={apiKey}
             temperature={temperature}
             selectedModel={selectedModel}
             initialPostText={activeEditorText}
@@ -165,7 +150,6 @@ export default function App() {
           <HookLibraryView 
             onLoadHookInEditor={handleLoadHookInEditor}
             showToast={showToast}
-            apiKey={apiKey}
           />
         )}
 
@@ -204,14 +188,12 @@ export default function App() {
         <span className="font-label-md text-label-md font-semibold">{toastMessage}</span>
       </div>
 
-      {/* API Config Modal */}
+      {/* Gemini AI Engine Modal */}
       <ApiConfigModal 
         isOpen={apiModalOpen}
         onClose={() => setApiModalOpen(false)}
-        apiKey={apiKey}
-        onSaveApiKey={handleSaveApiKey}
         temperature={temperature}
-        selectedModel={selectedModel}
+        onSavePreferences={handleSavePreferences}
       />
     </div>
   );

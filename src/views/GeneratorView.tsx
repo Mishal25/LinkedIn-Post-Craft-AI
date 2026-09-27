@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { PostTone, PostLength, DraftPost } from '../types';
-import { generateLinkedInPost } from '../services/geminiService';
+import { generateLinkedInPost, analyzeVisualWithGemini, improvePostWithGemini } from '../services/geminiService';
 import { toUnicodeBold, toUnicodeItalic, toBulletLines, toQuote, clearUnicodeFormatting, calculateReadTime } from '../utils/unicode';
 
 interface GeneratorViewProps {
@@ -8,7 +8,7 @@ interface GeneratorViewProps {
   onExploreHooks: () => void;
   onOpenApiConfig: () => void;
   showToast: (msg: string) => void;
-  apiKey: string;
+  apiKey?: string;
   temperature: number;
   selectedModel: string;
   initialPostText?: string;
@@ -240,15 +240,29 @@ What has been your experience? Drop your thoughts in the comments 👇
     showToast('Removed attached image');
   };
 
-  // AI narrative generation anchored on the visual
+  const [isPolishing, setIsPolishing] = useState<string | null>(null);
+
+  // AI narrative generation anchored on the visual using Gemini 3.8 Flash Multimodal Vision
   const handleExtractNarrativeFromVisual = async () => {
     if (!imageUrl) {
       showToast('Please upload or select an image first');
       return;
     }
     setIsExtractingFromImage(true);
-    showToast('Generating thought leadership narrative inspired by graphic...');
+    showToast('Gemini 3.8 Flash analyzing visual framework & extracting story...');
     try {
+      // First attempt multimodal vision analysis
+      const analysis = await analyzeVisualWithGemini(imageUrl, imageCaption);
+      if (analysis && analysis.suggestedPostDraft) {
+        setPostContent(analysis.suggestedPostDraft);
+        if (analysis.visualTitle && (!imageCaption || imageCaption.trim().length === 0)) {
+          setImageCaption(analysis.visualTitle);
+        }
+        showToast('Gemini extracted framework and generated post narrative!');
+        return;
+      }
+
+      // Fallback to text prompt with image context
       const generated = await generateLinkedInPost({
         topic: topic || (imageCaption ? `Deep dive breakdown of ${imageCaption}` : 'Key architecture & data framework lessons for founders'),
         tone: selectedTone,
@@ -260,7 +274,6 @@ What has been your experience? Drop your thoughts in the comments 👇
         includeViralHook,
         imageUrl,
         imageCaption,
-        apiKey,
         temperature
       });
       setPostContent(generated);
@@ -272,9 +285,29 @@ What has been your experience? Drop your thoughts in the comments 👇
     }
   };
 
+  // Quick Post Polish with Gemini 3.8 Flash
+  const handleQuickPolish = async (type: string, instruction: string) => {
+    if (!postContent.trim()) {
+      showToast('Please write or generate a draft first');
+      return;
+    }
+    setIsPolishing(type);
+    showToast(`Gemini 3.8 polishing post: ${type}...`);
+    try {
+      const improved = await improvePostWithGemini(postContent, instruction);
+      setPostContent(improved);
+      showToast(`Post refined with ${type}!`);
+    } catch {
+      showToast('Polishing completed');
+    } finally {
+      setIsPolishing(null);
+    }
+  };
+
   // Generate action
   const handleGenerate = async () => {
     setIsGenerating(true);
+    showToast('Gemini 3.8 Flash crafting your LinkedIn post...');
     try {
       const generated = await generateLinkedInPost({
         topic,
@@ -287,11 +320,10 @@ What has been your experience? Drop your thoughts in the comments 👇
         includeViralHook,
         imageUrl,
         imageCaption,
-        apiKey,
         temperature
       });
       setPostContent(generated);
-      showToast('Algorithmic draft generated successfully!');
+      showToast('Post generated with Gemini 3.8 Flash!');
     } catch {
       showToast('Generated fresh post variant!');
     } finally {
@@ -947,7 +979,7 @@ What has been your experience? Drop your thoughts in the comments 👇
               <span className={`material-symbols-outlined text-[20px] ${isGenerating ? 'animate-spin' : 'transition-transform group-hover:rotate-12'}`}>
                 {isGenerating ? 'progress_activity' : 'auto_awesome'}
               </span>
-              <span>{isGenerating ? 'Writing Algorithmic Draft...' : 'Generate LinkedIn Post'}</span>
+              <span>{isGenerating ? 'Gemini 3.8 Generating Post...' : 'Generate with Gemini 3.8 Flash'}</span>
               <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
             </button>
           </div>
@@ -1043,6 +1075,61 @@ What has been your experience? Drop your thoughts in the comments 👇
               >
                 <span className="material-symbols-outlined text-[16px]">content_copy</span>
                 <span>Copy Post</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Gemini 3.8 Quick Polish Bar */}
+          <div className="bg-surface-container-lowest p-2.5 rounded-2xl shadow-xs flex flex-wrap items-center justify-between gap-2 border border-surface-container">
+            <div className="flex items-center gap-1.5 text-label-sm font-semibold text-primary">
+              <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
+              <span className="font-bold whitespace-nowrap">Gemini Polish:</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                disabled={isPolishing !== null}
+                onClick={() => handleQuickPolish('Punchier Hook', 'Make the opening 3 lines significantly punchier with high tension, counter-intuitive contrast, or specific numbers to stop the mobile scroll')}
+                className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-surface-container-low hover:bg-primary-container hover:text-on-primary text-on-surface transition-colors flex items-center gap-1 border border-surface-container disabled:opacity-50"
+              >
+                <span>🔥</span>
+                <span>{isPolishing === 'Punchier Hook' ? 'Polishing...' : 'Punchier Hook'}</span>
+              </button>
+              <button
+                type="button"
+                disabled={isPolishing !== null}
+                onClick={() => handleQuickPolish('Executive Voice', 'Elevate vocabulary, remove fluff, and adopt an authoritative Fortune 500 CEO / Founder thought leadership tone')}
+                className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-surface-container-low hover:bg-primary-container hover:text-on-primary text-on-surface transition-colors flex items-center gap-1 border border-surface-container disabled:opacity-50"
+              >
+                <span>⚡</span>
+                <span>{isPolishing === 'Executive Voice' ? 'Polishing...' : 'Executive Voice'}</span>
+              </button>
+              <button
+                type="button"
+                disabled={isPolishing !== null}
+                onClick={() => handleQuickPolish('Mobile Tighten', 'Condense paragraphs into crisp 1-2 sentence lines, maximize line spacing and readability for LinkedIn mobile app feeds')}
+                className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-surface-container-low hover:bg-primary-container hover:text-on-primary text-on-surface transition-colors flex items-center gap-1 border border-surface-container disabled:opacity-50"
+              >
+                <span>📱</span>
+                <span>{isPolishing === 'Mobile Tighten' ? 'Tightening...' : 'Mobile Tighten'}</span>
+              </button>
+              <button
+                type="button"
+                disabled={isPolishing !== null}
+                onClick={() => handleQuickPolish('Contrarian Angle', 'Add an unapologetic, contrarian observation that challenges traditional conventional wisdom')}
+                className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-surface-container-low hover:bg-primary-container hover:text-on-primary text-on-surface transition-colors flex items-center gap-1 border border-surface-container disabled:opacity-50"
+              >
+                <span>💡</span>
+                <span>{isPolishing === 'Contrarian Angle' ? 'Reframing...' : 'Contrarian Angle'}</span>
+              </button>
+              <button
+                type="button"
+                disabled={isPolishing !== null}
+                onClick={() => handleQuickPolish('Viral CTA', 'Replace or refine the closing Call-To-Action into an engaging, low-friction question that drives massive comment thread velocity')}
+                className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-surface-container-low hover:bg-primary-container hover:text-on-primary text-on-surface transition-colors flex items-center gap-1 border border-surface-container disabled:opacity-50"
+              >
+                <span>🎯</span>
+                <span>{isPolishing === 'Viral CTA' ? 'Upgrading...' : 'Viral CTA'}</span>
               </button>
             </div>
           </div>
